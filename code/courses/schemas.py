@@ -10,6 +10,7 @@ Skema terbagi menjadi:
 from ninja import Schema, Field
 from datetime import datetime
 from typing import Optional, List
+from pydantic import field_validator
 
 
 class UserOut(Schema):
@@ -102,10 +103,13 @@ class CourseContentOut(Schema):
     name: str
     description: str
     video_url: Optional[str] = None
-    course_id: int
-    parent_id: Optional[int] = None
+    course_id: int = Field(..., alias='course_id_id')
+    parent_id: Optional[int] = Field(None, alias='parent_id_id')
     created_at: datetime
     updated_at: datetime
+    
+    class Config:
+        populate_by_name = True
 
 
 class CourseMemberIn(Schema):

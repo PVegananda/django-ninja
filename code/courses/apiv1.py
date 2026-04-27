@@ -210,10 +210,10 @@ def list_contents(
     - GET /api/v1/contents/?course_id=1
     - GET /api/v1/contents/?search=Django&ordering=name
     """
-    qs = CourseContent.objects.select_related('course_id').all()
+    qs = CourseContent.objects.all()
 
     if course_id is not None:
-        qs = qs.filter(course_id=course_id)
+        qs = qs.filter(course_id_id=course_id)
     if search:
         qs = qs.filter(name__icontains=search)
 
