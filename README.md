@@ -1,3 +1,8 @@
+![Django](https://img.shields.io/badge/Django-5.0-darkgreen?style=for-the-badge&logo=django)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue?style=for-the-badge&logo=postgresql)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker)
+![Python](https://img.shields.io/badge/Python-3.11-blue?style=for-the-badge&logo=python)
+
 # Django Ninja - Simple LMS API
 
 REST API untuk Simple Learning Management System menggunakan Django Ninja. Project ini adalah praktik modul 06 dari Pemrograman Sisi Server.
