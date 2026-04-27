@@ -96,6 +96,7 @@ class CourseContentOut(Schema):
     Schema untuk output data CourseContent.
     
     Berisi semua field termasuk timestamps.
+    Note: Uses course_id_id (Django ForeignKey naming) mapped to course_id for API
     """
     id: int
     name: str

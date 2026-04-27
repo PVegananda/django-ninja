@@ -252,7 +252,14 @@ def create_content(request, data: CourseContentIn):
     if data.parent_id:
         get_object_or_404(CourseContent, pk=data.parent_id)
 
-    content = CourseContent.objects.create(**data.dict())
+    # Convert course_id dan parent_id to use Django's ForeignKey naming (_id suffix)
+    content_data = data.dict()
+    if content_data.get('course_id'):
+        content_data['course_id_id'] = content_data.pop('course_id')
+    if content_data.get('parent_id'):
+        content_data['parent_id_id'] = content_data.pop('parent_id')
+    
+    content = CourseContent.objects.create(**content_data)
     return 201, content
 
 
@@ -282,7 +289,14 @@ def update_content(request, id: int, data: CourseContentIn):
 
     content = get_object_or_404(CourseContent, pk=id)
 
-    for attr, value in data.dict().items():
+    # Handle ForeignKey field naming
+    update_data = data.dict()
+    if update_data.get('course_id'):
+        update_data['course_id_id'] = update_data.pop('course_id')
+    if update_data.get('parent_id'):
+        update_data['parent_id_id'] = update_data.pop('parent_id')
+    
+    for attr, value in update_data.items():
         setattr(content, attr, value)
     content.save()
 
