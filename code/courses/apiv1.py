@@ -165,10 +165,13 @@ def detail_course(request, id: int):
     ).select_related('teacher').get(pk=id)
 
 
-@apiv1.post('courses/', response={201: CourseOut}, tags=["Courses"])
+@apiv1.post('courses/', response={201: CourseOut}, auth=apiAuth, tags=["Courses"])
 def create_course(request, data: CourseIn):
     """
     Membuat course baru.
+    
+    Hanya user yang sudah login yang bisa membuat course.
+    User yang membuat otomatis menjadi teacher dari course ini.
 
     Request Body (JSON):
     {
@@ -178,24 +181,25 @@ def create_course(request, data: CourseIn):
     }
 
     Response: 201 Created dengan data course yang dibuat
-
-    Note: Field 'teacher' diisi otomatis dari user pertama (pada Modul 07 akan diambil dari request.auth)
+    
+    Authentication: Wajib login (Bearer token)
     """
     if data.price < 0:
         raise HttpError(400, "Harga tidak boleh negatif")
 
-    teacher = User.objects.first()
-    if not teacher:
-        raise HttpError(400, "Belum ada user teacher di database")
+    # Ambil user dari request (sudah terautentikasi)
+    teacher = User.objects.get(pk=request.user.id)
 
     course = Course.objects.create(**data.dict(), teacher=teacher)
     return 201, course
 
 
-@apiv1.put('courses/{id}', response=CourseOut, tags=["Courses"])
+@apiv1.put('courses/{id}', response=CourseOut, auth=apiAuth, tags=["Courses"])
 def update_course(request, id: int, data: CourseIn):
     """
     Mengupdate data course secara keseluruhan (PUT).
+    
+    Hanya pemilik course yang boleh mengedit.
 
     Path Parameters:
     - id: ID course yang akan diupdate
@@ -208,11 +212,21 @@ def update_course(request, id: int, data: CourseIn):
     }
 
     Response: 200 OK dengan data course yang sudah diupdate
+    Errors:
+    - 403: User bukan pemilik course
+    - 404: Course tidak ditemukan
+    
+    Authentication: Wajib login (Bearer token)
     """
     if data.price < 0:
         raise HttpError(400, "Harga tidak boleh negatif")
 
+    user = User.objects.get(pk=request.user.id)
     course = get_object_or_404(Course, pk=id)
+    
+    # Authorization check: hanya course owner yang boleh edit
+    if course.teacher != user:
+        raise HttpError(403, "Hanya pemilik course yang dapat mengedit")
 
     for attr, value in data.dict().items():
         setattr(course, attr, value)
@@ -221,17 +235,29 @@ def update_course(request, id: int, data: CourseIn):
     return course
 
 
-@apiv1.delete('courses/{id}', response={204: None}, tags=["Courses"])
+@apiv1.delete('courses/{id}', response={204: None}, auth=apiAuth, tags=["Courses"])
 def delete_course(request, id: int):
     """
     Menghapus course.
+    
+    Hanya pemilik course dan superadmin yang boleh menghapus.
 
     Path Parameters:
     - id: ID course yang akan dihapus
 
     Response: 204 No Content (tanpa body)
+    Errors:
+    - 403: User tidak memiliki izin untuk menghapus
+    - 404: Course tidak ditemukan
+    
+    Authentication: Wajib login (Bearer token)
     """
+    user = User.objects.get(pk=request.user.id)
     course = get_object_or_404(Course, pk=id)
+    
+    # Authorization check: course owner ATAU superadmin
+    if course.teacher != user and not user.is_superuser:
+        raise HttpError(403, "Anda tidak memiliki izin untuk menghapus course ini")
 
     try:
         course.delete()
