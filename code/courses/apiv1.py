@@ -16,10 +16,12 @@ from ninja.errors import HttpError
 from ninja_simple_jwt.auth.views.api import mobile_auth_router
 from ninja_simple_jwt.auth.ninja_auth import HttpJwtAuth
 from django.contrib.auth.models import User
-from courses.models import Course, CourseContent
+from courses.models import Course, CourseContent, CourseMember, Comment
 from courses.schemas import (
     CourseIn, CourseOut, DetailCourseOut,
-    CourseContentIn, CourseContentOut
+    CourseContentIn, CourseContentOut,
+    Register, UserOut, CommentIn, CommentOut, CommentUpdate,
+    CourseMemberOut
 )
 from typing import List
 
@@ -61,6 +63,47 @@ def get_object_or_404(model, **kwargs):
     except model.DoesNotExist:
         model_name = model.__name__
         raise HttpError(404, f"{model_name} tidak ditemukan")
+
+
+# ============================================================================
+# AUTHENTICATION ENDPOINTS
+# ============================================================================
+
+@apiv1.post('register/', response=UserOut, status_code=201, tags=["Authentication"])
+def register(request, data: Register):
+    """
+    Membuat akun user baru (registrasi).
+    
+    Request body:
+    - username: Username unik (wajib)
+    - password: Password (akan di-hash otomatis) (wajib)
+    - email: Email unik (wajib)
+    - first_name: Nama depan (wajib)
+    - last_name: Nama belakang (wajib)
+    
+    Response: Data user baru (tanpa password)
+    Errors:
+    - 400: Username atau email sudah digunakan
+    """
+    # Cek apakah username sudah digunakan
+    if User.objects.filter(username=data.username).exists():
+        raise HttpError(400, "Username sudah digunakan")
+    
+    # Cek apakah email sudah digunakan
+    if User.objects.filter(email=data.email).exists():
+        raise HttpError(400, "Email sudah digunakan")
+    
+    # Buat user baru
+    # create_user() otomatis melakukan hashing pada password
+    new_user = User.objects.create_user(
+        username=data.username,
+        password=data.password,
+        email=data.email,
+        first_name=data.first_name,
+        last_name=data.last_name
+    )
+    
+    return new_user
 
 
 # ============================================================================
