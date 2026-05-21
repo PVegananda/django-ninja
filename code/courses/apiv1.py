@@ -8,10 +8,13 @@ Features:
 - CRUD operations untuk Course dan CourseContent
 - Error handling dengan HttpError
 - Query parameters untuk filtering & searching
+- JWT Authentication dengan ninja-simple-jwt (Modul 07)
 """
 
 from ninja import NinjaAPI
 from ninja.errors import HttpError
+from ninja_simple_jwt.auth.views.api import mobile_auth_router
+from ninja_simple_jwt.auth.ninja_auth import HttpJwtAuth
 from django.contrib.auth.models import User
 from courses.models import Course, CourseContent
 from courses.schemas import (
@@ -27,8 +30,18 @@ from typing import List
 apiv1 = NinjaAPI(
     title="Simple LMS API",
     version="1.0.0",
-    description="REST API untuk Simple Learning Management System - Modul 06"
+    description="REST API untuk Simple Learning Management System - Modul 07 (Authentication & Authorization)"
 )
+
+# Register authentication router dari ninja-simple-jwt
+# Ini menyediakan endpoint:
+#   - POST /api/v1/auth/sign-in  (login & mendapatkan token)
+#   - POST /api/v1/auth/token-refresh (refresh access token)
+apiv1.add_router("/auth/", mobile_auth_router)
+
+# Inisialisasi JWT auth handler
+# Digunakan sebagai parameter auth=apiAuth pada endpoint yang butuh authentication
+apiAuth = HttpJwtAuth()
 
 
 # ============================================================================
