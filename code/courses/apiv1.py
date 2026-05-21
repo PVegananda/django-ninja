@@ -456,6 +456,133 @@ def delete_content(request, id: int):
 
 
 # ============================================================================
+# COMMENT ENDPOINTS - with Authorization
+# ============================================================================
+
+@apiv1.post('comments/', auth=apiAuth, response=dict, tags=["Comments"])
+def post_comment(request, data: CommentIn):
+    """
+    Membuat komentar pada course content.
+    
+    Hanya user yang terdaftar (enrolled) di course ini yang boleh komentar.
+
+    Request Body:
+    {
+        "comment": "Konten ini sangat bermanfaat!",
+        "content_id": 1
+    }
+
+    Response: Success message
+    Errors:
+    - 403: User tidak terdaftar di course ini
+    - 404: Content tidak ditemukan
+    
+    Authentication: Wajib login (Bearer token)
+    """
+    user = User.objects.get(pk=request.user.id)
+    content = CourseContent.objects.filter(id=data.content_id).first()
+    
+    if content is None:
+        raise HttpError(404, "Content tidak ditemukan")
+    
+    # Authorization check: apakah user terdaftar di course ini?
+    course_member = CourseMember.objects.filter(
+        user_id=user,
+        course_id=content.course_id
+    )
+    
+    if course_member.exists():
+        Comment.objects.create(
+            comment=data.comment,
+            user_id=user,
+            content_id=content
+        )
+        return {"message": "Komentar berhasil ditambahkan"}
+    else:
+        raise HttpError(403, "Anda tidak terdaftar di course ini")
+
+
+@apiv1.put('comments/{id}', auth=apiAuth, response=dict, tags=["Comments"])
+def update_comment(request, id: int, data: CommentUpdate):
+    """
+    Mengupdate komentar.
+    
+    Hanya pemilik komentar yang boleh mengedit.
+
+    Path Parameters:
+    - id: ID komentar yang akan diupdate
+
+    Request Body:
+    {
+        "comment": "Konten ini sangat bermanfaat! Terimakasih!"
+    }
+
+    Response: Success message
+    Errors:
+    - 403: User bukan pemilik komentar
+    - 404: Komentar tidak ditemukan
+    
+    Authentication: Wajib login (Bearer token)
+    """
+    user = User.objects.get(pk=request.user.id)
+    comment = Comment.objects.filter(id=id).first()
+    
+    if comment is None:
+        raise HttpError(404, "Komentar tidak ditemukan")
+    
+    # Authorization check: apakah user adalah pemilik komentar?
+    if comment.user_id != user:
+        raise HttpError(403, "Anda tidak memiliki izin untuk mengedit komentar ini")
+    
+    comment.comment = data.comment
+    comment.save()
+    return {"message": "Komentar berhasil diperbarui"}
+
+
+@apiv1.delete('comments/{id}', auth=apiAuth, response={204: None}, tags=["Comments"])
+def delete_comment(request, id: int):
+    """
+    Menghapus komentar.
+    
+    Bisa dihapus oleh:
+    - Pemilik komentar
+    - Pemilik course (teacher)
+    - Superadmin
+
+    Path Parameters:
+    - id: ID komentar yang akan dihapus
+
+    Response: 204 No Content
+    Errors:
+    - 403: User tidak memiliki izin untuk menghapus
+    - 404: Komentar tidak ditemukan
+    
+    Authentication: Wajib login (Bearer token)
+    """
+    user = User.objects.get(pk=request.user.id)
+    comment = Comment.objects.select_related('content_id__course_id').filter(id=id).first()
+    
+    if comment is None:
+        raise HttpError(404, "Komentar tidak ditemukan")
+    
+    # Cek apakah user adalah pemilik komentar
+    is_comment_owner = (comment.user_id == user)
+    
+    # Cek apakah user adalah pemilik course
+    course = comment.content_id.course_id
+    is_course_owner = (course.teacher == user)
+    
+    # Cek apakah user adalah superadmin
+    is_superadmin = user.is_superuser
+    
+    if is_comment_owner or is_course_owner or is_superadmin:
+        comment.delete()
+        return 204, None
+    else:
+        raise HttpError(403, "Anda tidak memiliki izin untuk menghapus komentar ini")
+
+
+# ============================================================================
 # TEST ENDPOINT
 # ============================================================================
 
