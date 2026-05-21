@@ -364,10 +364,12 @@ def detail_content(request, id: int):
     return get_object_or_404(CourseContent, pk=id)
 
 
-@apiv1.post('contents/', response={201: CourseContentOut}, tags=["Contents"])
+@apiv1.post('contents/', response={201: CourseContentOut}, auth=apiAuth, tags=["Contents"])
 def create_content(request, data: CourseContentIn):
     """
     Membuat course content baru.
+    
+    Hanya pemilik course yang boleh membuat content di course-nya.
 
     Request Body (JSON):
     {
@@ -379,8 +381,18 @@ def create_content(request, data: CourseContentIn):
     }
 
     Response: 201 Created dengan data content yang dibuat
+    Errors:
+    - 403: User bukan pemilik course
+    - 404: Course atau parent content tidak ditemukan
+    
+    Authentication: Wajib login (Bearer token)
     """
-    get_object_or_404(Course, pk=data.course_id)
+    user = User.objects.get(pk=request.user.id)
+    course = get_object_or_404(Course, pk=data.course_id)
+    
+    # Authorization: hanya course owner yang boleh membuat content
+    if course.teacher != user:
+        raise HttpError(403, "Hanya pemilik course yang dapat membuat content")
 
     if data.parent_id:
         get_object_or_404(CourseContent, pk=data.parent_id)
@@ -396,10 +408,12 @@ def create_content(request, data: CourseContentIn):
     return 201, content
 
 
-@apiv1.put('contents/{id}', response=CourseContentOut, tags=["Contents"])
+@apiv1.put('contents/{id}', response=CourseContentOut, auth=apiAuth, tags=["Contents"])
 def update_content(request, id: int, data: CourseContentIn):
     """
     Mengupdate data course content secara keseluruhan (PUT).
+    
+    Hanya pemilik course yang boleh mengedit content.
 
     Path Parameters:
     - id: ID course content yang akan diupdate
@@ -414,8 +428,18 @@ def update_content(request, id: int, data: CourseContentIn):
     }
 
     Response: 200 OK dengan data content yang sudah diupdate
+    Errors:
+    - 403: User bukan pemilik course
+    - 404: Content atau course tidak ditemukan
+    
+    Authentication: Wajib login (Bearer token)
     """
-    get_object_or_404(Course, pk=data.course_id)
+    user = User.objects.get(pk=request.user.id)
+    course = get_object_or_404(Course, pk=data.course_id)
+    
+    # Authorization: hanya course owner yang boleh edit content
+    if course.teacher != user:
+        raise HttpError(403, "Hanya pemilik course yang dapat mengedit content")
 
     if data.parent_id:
         get_object_or_404(CourseContent, pk=data.parent_id)
@@ -436,17 +460,35 @@ def update_content(request, id: int, data: CourseContentIn):
     return content
 
 
-@apiv1.delete('contents/{id}', response={204: None}, tags=["Contents"])
+@apiv1.delete('contents/{id}', response={204: None}, auth=apiAuth, tags=["Contents"])
 def delete_content(request, id: int):
     """
     Menghapus course content.
+    
+    Bisa dihapus oleh:
+    - Pemilik course (teacher)
+    - Superadmin
 
     Path Parameters:
     - id: ID course content yang akan dihapus
 
     Response: 204 No Content
+    Errors:
+    - 403: User tidak memiliki izin untuk menghapus
+    - 404: Content tidak ditemukan
+    
+    Authentication: Wajib login (Bearer token)
     """
-    content = get_object_or_404(CourseContent, pk=id)
+    user = User.objects.get(pk=request.user.id)
+    content = CourseContent.objects.select_related('course_id').filter(id=id).first()
+    
+    if content is None:
+        raise HttpError(404, "Content tidak ditemukan")
+    
+    # Authorization: course owner ATAU superadmin
+    course = content.course_id
+    if course.teacher != user and not user.is_superuser:
+        raise HttpError(403, "Anda tidak memiliki izin untuk menghapus content ini")
 
     try:
         content.delete()
