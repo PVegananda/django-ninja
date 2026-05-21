@@ -135,20 +135,59 @@ PostgreSQL running di container. Default credentials di `docker-compose.yml`:
 
 Sudah ada 100+ courses dengan teacher dan content data ready.
 
+## Modul 07: Authentication & Authorization
+
+### Fitur Baru (JWT Token-Based)
+- User registration dengan validasi duplikasi
+- Login & token generation (access + refresh token)
+- Token refresh tanpa login ulang
+- Protected endpoints dengan Bearer token
+- Role-Based Access Control (RBAC)
+- Authorization checks pada setiap endpoint
+
+### Auth Endpoints
+- `POST /api/v1/register/` - Daftar user baru
+- `POST /api/v1/auth/sign-in` - Login & dapat token
+- `POST /api/v1/auth/token-refresh` - Refresh access token
+
+### User Functions
+- `POST /api/v1/course/{id}/enroll/` - Daftar ke course (auth required)
+- `GET /api/v1/mycourses/` - List course yang diikuti (auth required)
+
+### Comment Management (dengan Authorization)
+- `POST /api/v1/comments/` - Buat komentar (hanya member)
+- `PUT /api/v1/comments/{id}` - Edit komentar (hanya owner)
+- `DELETE /api/v1/comments/{id}` - Hapus komentar (owner/teacher/admin)
+
+### Protected Endpoints
+- `POST /api/v1/courses/` - Buat course (auth + auto teacher)
+- `PUT /api/v1/courses/{id}` - Edit course (auth + owner only)
+- `DELETE /api/v1/courses/{id}` - Hapus course (owner/admin)
+- Content CRUD juga dilindungi (owner only)
+
+### Test di Swagger UI
+1. Register user: `POST /register/` → dapat user ID
+2. Login: `POST /auth/sign-in` → dapat tokens
+3. Klik "Authorize" di Swagger → masukkan access token
+4. Semua request otomatis include token
+
 ## Commits
 
 Project ini dibuat step-by-step dengan jelas commit history:
 
 ```
-8e1687d - 8.1-8.5: Finalize API dengan complete documentation
-fa988ef - Fix: Add timestamps to CourseContent & ForeignKey handling
-e6b6749 - 4.1-4.5: CRUD endpoints untuk Course
-d51fabf - 3.1: membuat schemas pydantic untuk validasi input/output
-e2096df - step 1.4 tambah url
-2694ee2 - membuat apiv1
+aa7348d - 9: Setup script untuk migrations & seed data
+84207cc - 8.1-8.3: Proteksi Content CRUD (owner only)
+fad76ca - 7.1-7.3: Comment CRUD dengan full authorization
+487143f - 6.1-6.2: Course enrollment & mycourses endpoints
+a80ef43 - 5.1-5.3: Proteksi Course CRUD (auth + owner checks)
+6182f08 - 4.1-4.5: Register endpoint dengan validasi
+fa49f4a - 3.1-3.3: Schemas untuk auth & comments
+346cb4f - 2: Auth router & HttpJwtAuth
+115c488 - 1.1-1.2: Setup JWT (requirements + INSTALLED_APPS)
 ```
 
-Tiap commit adalah satu step pembelajaran.
+Plus Modul 06 commits untuk CRUD endpoints dasar.
 
 ## Apa yang Dipelajari
 
@@ -158,6 +197,9 @@ Tiap commit adalah satu step pembelajaran.
 - CRUD operations
 - Query parameters & filtering
 - Error handling
+- **JWT Token-based Authentication** (Modul 07)
+- **Authorization & Access Control** (Modul 07)
+- **RBAC - Role-Based Access Control** (Modul 07)
 - Auto-generated API documentation
 - Django Ninja basics
 
