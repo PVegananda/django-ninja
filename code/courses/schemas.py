@@ -22,6 +22,24 @@ class UserOut(Schema):
     email: str
 
 
+class Register(Schema):
+    """
+    Schema untuk registrasi user baru.
+    
+    Field yang diminta saat register:
+    - username: Username unik
+    - password: Password (akan di-hash otomatis)
+    - email: Email unik
+    - first_name: Nama depan
+    - last_name: Nama belakang
+    """
+    username: str
+    password: str
+    email: str
+    first_name: str
+    last_name: str
+
+
 class CourseIn(Schema):
     """
     Schema untuk input saat membuat/mengupdate Course.
@@ -125,3 +143,25 @@ class CourseMemberOut(Schema):
     course_id: int
     user_id: int
     roles: str
+    created_at: datetime
+
+
+class CommentIn(Schema):
+    """Schema untuk input saat membuat komentar."""
+    comment: str
+    content_id: int
+
+
+class CommentUpdate(Schema):
+    """Schema untuk update komentar."""
+    comment: str
+
+
+class CommentOut(Schema):
+    """Schema untuk output data komentar."""
+    id: int
+    comment: str
+    user_id: int
+    content_id: int
+    created_at: datetime
+    updated_at: datetime
