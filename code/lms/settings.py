@@ -31,8 +31,9 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "silk",       # Django Silk - query profiling (Modul 05)
-    "courses",    # Aplikasi Simple LMS kita
+    "silk",                 # Django Silk - query profiling (Modul 05)
+    "ninja_simple_jwt",     # JWT authentication (Modul 07)
+    "courses",              # Aplikasi Simple LMS kita
 ]
 
 
