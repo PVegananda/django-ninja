@@ -269,6 +269,57 @@ def delete_course(request, id: int):
         )
 
 
+@apiv1.post('course/{id}/enroll/', auth=apiAuth, response=CourseMemberOut, tags=["Courses"])
+def course_enrollment(request, id: int):
+    """
+    Mendaftarkan user saat ini ke sebuah course.
+    
+    User akan mendapatkan role 'std' (student) secara default.
+
+    Path Parameters:
+    - id: ID course yang akan diikuti
+
+    Response: Data enrollment (CourseMember) yang baru dibuat
+    Errors:
+    - 400: User sudah terdaftar di course ini
+    - 404: Course tidak ditemukan
+    
+    Authentication: Wajib login (Bearer token)
+    """
+    user = User.objects.get(pk=request.user.id)
+    course = get_object_or_404(Course, pk=id)
+    
+    # Cek apakah sudah terdaftar
+    if CourseMember.objects.filter(user_id=user, course_id=course).exists():
+        raise HttpError(400, "Anda sudah terdaftar di course ini")
+    
+    enrollment = CourseMember.objects.create(
+        user_id=user,
+        course_id=course,
+        roles='std'  # Default role: student
+    )
+    return enrollment
+
+
+@apiv1.get('mycourses/', auth=apiAuth, response=List[CourseMemberOut], tags=["Courses"])
+def get_my_courses(request):
+    """
+    Mengambil daftar course yang diikuti oleh user saat ini.
+    
+    Menampilkan semua course yang sudah di-enroll dengan role user
+    di setiap course.
+
+    Response: List CourseMember berisi data course yang diikuti
+    
+    Authentication: Wajib login (Bearer token)
+    """
+    user = User.objects.get(pk=request.user.id)
+    mycourses = CourseMember.objects.filter(
+        user_id=user
+    ).select_related('course_id', 'user_id')
+    return mycourses
+
+
 # ============================================================================
 # COURSE CONTENT ENDPOINTS - CRUD Operations
 # ============================================================================
