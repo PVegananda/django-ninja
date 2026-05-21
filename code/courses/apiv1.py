@@ -69,7 +69,7 @@ def get_object_or_404(model, **kwargs):
 # AUTHENTICATION ENDPOINTS
 # ============================================================================
 
-@apiv1.post('register/', response=UserOut, status_code=201, tags=["Authentication"])
+@apiv1.post('register/', response={201: UserOut}, tags=["Authentication"])
 def register(request, data: Register):
     """
     Membuat akun user baru (registrasi).
@@ -103,7 +103,7 @@ def register(request, data: Register):
         last_name=data.last_name
     )
     
-    return new_user
+    return 201, new_user
 
 
 # ============================================================================
