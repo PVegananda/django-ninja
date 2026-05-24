@@ -14,6 +14,7 @@ Features:
 from ninja import NinjaAPI, Query
 from ninja.errors import HttpError
 from ninja.pagination import paginate, PageNumberPagination
+from django_ratelimit.decorators import ratelimit
 from ninja_simple_jwt.auth.views.api import mobile_auth_router
 from ninja_simple_jwt.auth.ninja_auth import HttpJwtAuth
 from django.contrib.auth.models import User
@@ -28,13 +29,33 @@ from courses.filters import CourseFilter, CourseContentFilter
 from typing import List
 
 # ============================================================================
+# Rate Limiting
+# ============================================================================
+
+"""
+Rate limiting menggunakan django-ratelimit decorator.
+
+Format: @ratelimit(key='ip|user', rate='<count>/<period>', method='GET|POST|...', block=True)
+
+Periods: s, m, h, d
+Examples:
+- '5/m'   = 5 requests per minute
+- '100/h' = 100 requests per hour
+- '10/d'  = 10 requests per day
+
+Key types:
+- 'ip':    Rate limit berdasarkan IP address (untuk anonymous users)
+- 'user':  Rate limit berdasarkan user ID (untuk authenticated users)
+"""
+
+# ============================================================================
 # API Instance
 # ============================================================================
 
 apiv1 = NinjaAPI(
     title="Simple LMS API",
     version="1.0.0",
-    description="REST API untuk Simple Learning Management System - Modul 07 (Authentication & Authorization)"
+    description="REST API untuk Simple Learning Management System - Modul 08 (Advanced API Features)"
 )
 
 # Register authentication router dari ninja-simple-jwt
@@ -71,11 +92,14 @@ def get_object_or_404(model, **kwargs):
 # AUTHENTICATION ENDPOINTS
 # ============================================================================
 
+@ratelimit(key='ip', rate='5/m', method='POST', block=True)
 @apiv1.post('register/', response={201: UserOut}, tags=["Authentication"])
 def register(request, data: Register):
     """
     Membuat akun user baru (registrasi).
     
+    Rate limited dengan 5 attempts per minute untuk mencegah abuse dan brute force attack.
+
     Request body:
     - username: Username unik (wajib)
     - password: Password (akan di-hash otomatis) (wajib)
@@ -86,6 +110,7 @@ def register(request, data: Register):
     Response: Data user baru (tanpa password)
     Errors:
     - 400: Username atau email sudah digunakan
+    - 429: Terlalu banyak request (rate limit)
     """
     # Cek apakah username sudah digunakan
     if User.objects.filter(username=data.username).exists():
