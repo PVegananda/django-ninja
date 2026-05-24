@@ -11,8 +11,9 @@ Features:
 - JWT Authentication dengan ninja-simple-jwt (Modul 07)
 """
 
-from ninja import NinjaAPI
+from ninja import NinjaAPI, Query
 from ninja.errors import HttpError
+from ninja.pagination import paginate, PageNumberPagination
 from ninja_simple_jwt.auth.views.api import mobile_auth_router
 from ninja_simple_jwt.auth.ninja_auth import HttpJwtAuth
 from django.contrib.auth.models import User
@@ -23,6 +24,7 @@ from courses.schemas import (
     Register, UserOut, CommentIn, CommentOut, CommentUpdate,
     CourseMemberOut
 )
+from courses.filters import CourseFilter, CourseContentFilter
 from typing import List
 
 # ============================================================================
@@ -111,37 +113,52 @@ def register(request, data: Register):
 # ============================================================================
 
 @apiv1.get('courses/', response=List[CourseOut], tags=["Courses"])
+@paginate(PageNumberPagination, page_size=10)
 def list_courses(
     request,
-    search: str = None,
-    min_price: int = None,
-    max_price: int = None,
+    filters: CourseFilter = Query(...),
     ordering: str = '-created_at',
 ):
     """
-    Mengambil daftar semua course dengan filter opsional.
+    Mengambil daftar semua course dengan filtering, sorting, dan pagination.
 
     Query Parameters:
-    - search: Cari berdasarkan nama course (case-insensitive)
-    - min_price: Harga minimum course
-    - max_price: Harga maksimum course
-    - ordering: Urutan hasil (default: -created_at = terbaru)
+    - search: Cari berdasarkan nama course atau deskripsi (case-insensitive)
+    - price: Tampilkan course dengan harga di atas nilai ini
+    - created_at: Tampilkan course yang dibuat setelah tanggal tertentu
+    - ordering: Urutan hasil (name, -name, price, -price, created_at, -created_at) (default: -created_at)
+    - page: Nomor halaman (default: 1, per-page: 10)
 
     Contoh:
+    - GET /api/v1/courses/
     - GET /api/v1/courses/?search=python
-    - GET /api/v1/courses/?min_price=50000&max_price=100000
-    - GET /api/v1/courses/?search=web&ordering=price
+    - GET /api/v1/courses/?price=50000&ordering=-price
+    - GET /api/v1/courses/?search=web&ordering=price&page=2
+
+    Response dengan pagination:
+    {
+        "items": [
+            {"id": 1, "name": "Belajar Python Dasar", "price": 75000, ...},
+            ...
+        ],
+        "count": 15
+    }
     """
+    # Whitelist field yang boleh digunakan untuk sorting
+    allowed_fields = ['name', 'price', 'created_at', '-name', '-price', '-created_at']
+    if ordering not in allowed_fields:
+        ordering = '-created_at'
+
+    # Query dengan select_related untuk optimasi
     qs = Course.objects.select_related('teacher').all()
 
-    if search:
-        qs = qs.filter(name__icontains=search)
-    if min_price is not None:
-        qs = qs.filter(price__gte=min_price)
-    if max_price is not None:
-        qs = qs.filter(price__lte=max_price)
+    # Terapkan filter
+    qs = filters.filter(qs)
 
-    return qs.order_by(ordering)
+    # Terapkan sorting
+    qs = qs.order_by(ordering)
+
+    return qs
 
 
 @apiv1.get('courses/{id}', response=DetailCourseOut, tags=["Courses"])
