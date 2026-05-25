@@ -18,6 +18,7 @@ from django_ratelimit.decorators import ratelimit
 from ninja_simple_jwt.auth.views.api import mobile_auth_router
 from ninja_simple_jwt.auth.ninja_auth import HttpJwtAuth
 from django.contrib.auth.models import User
+from django.http import HttpRequest
 from courses.models import Course, CourseContent, CourseMember, Comment
 from courses.schemas import (
     CourseIn, CourseOut, DetailCourseOut,
@@ -666,8 +667,113 @@ def delete_comment(request, id: int):
         raise HttpError(403, "Anda tidak memiliki izin untuk menghapus komentar ini")
 
 
+# ============================================================================# FILE UPLOAD ENDPOINTS - Modul 08
 # ============================================================================
-# TEST ENDPOINT
+
+@apiv1.post('courses/{id}/upload-image/', auth=apiAuth, tags=["File Upload"])
+def upload_course_image(request, id: int):
+    """
+    Upload gambar thumbnail untuk course.
+    
+    Hanya teacher pemilik course yang boleh mengupload gambar.
+    
+    Path Parameters:
+    - id: ID course
+    
+    Form Parameters:
+    - file: File gambar (JPEG, PNG, WebP)
+    
+    Validasi:
+    - Ukuran maksimal: 2MB
+    - Tipe file: image/jpeg, image/png, image/webp
+    
+    Response: {\"message\": \"Image berhasil diupload.\", \"filename\": \"...\"}
+    
+    Authentication: Wajib login (Bearer token)
+    """
+    # Get file from request
+    if 'file' not in request.FILES:
+        raise HttpError(400, "File tidak diberikan")
+    
+    file = request.FILES['file']
+    user = User.objects.get(pk=request.user.id)
+    course = get_object_or_404(Course, pk=id)
+    
+    # Validasi: hanya teacher pemilik course
+    if course.teacher != user:
+        raise HttpError(403, "Hanya teacher pemilik course yang boleh mengupload gambar")
+    
+    # Validasi ukuran file (maks 2MB)
+    if file.size > 2 * 1024 * 1024:
+        raise HttpError(400, "Ukuran file maksimal 2MB")
+    
+    # Validasi tipe file
+    allowed_types = ['image/jpeg', 'image/png', 'image/webp']
+    if file.content_type not in allowed_types:
+        raise HttpError(400, "Tipe file harus JPEG, PNG, atau WebP")
+    
+    # Simpan file
+    course.image = file
+    course.save()
+    
+    return {"message": "Image berhasil diupload", "filename": file.name}
+
+
+@apiv1.post('contents/{id}/upload-attachment/', auth=apiAuth, tags=["File Upload"])
+def upload_content_attachment(request, id: int):
+    """
+    Upload file attachment (materi) untuk CourseContent.
+    
+    Hanya teacher pemilik course yang boleh mengupload attachment.
+    
+    Path Parameters:
+    - id: ID course content
+    
+    Form Parameters:
+    - file: File attachment (PDF, DOCX, PPTX, ZIP)
+    
+    Validasi:
+    - Ukuran maksimal: 10MB
+    - Tipe file: application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document, dll
+    
+    Response: {\"message\": \"Attachment berhasil diupload.\", \"filename\": \"...\"}
+    
+    Authentication: Wajib login (Bearer token)
+    """
+    # Get file from request
+    if 'file' not in request.FILES:
+        raise HttpError(400, "File tidak diberikan")
+    
+    file = request.FILES['file']
+    user = User.objects.get(pk=request.user.id)
+    content = get_object_or_404(CourseContent, pk=id)
+    
+    # Validasi: hanya teacher pemilik course
+    if content.course_id.teacher != user:
+        raise HttpError(403, "Hanya teacher pemilik course yang boleh mengupload attachment")
+    
+    # Validasi ukuran file (maks 10MB)
+    if file.size > 10 * 1024 * 1024:
+        raise HttpError(400, "Ukuran file maksimal 10MB")
+    
+    # Validasi tipe file
+    allowed_types = [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',  # .docx
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',  # .pptx
+        'application/zip',
+    ]
+    if file.content_type not in allowed_types:
+        raise HttpError(400, f"Tipe file harus PDF, DOCX, PPTX, atau ZIP. Diterima: {file.content_type}")
+    
+    # Simpan file
+    content.file_attachment = file
+    content.save()
+    
+    return {"message": "Attachment berhasil diupload", "filename": file.name}
+
+
+# ============================================================================# TEST ENDPOINT
 # ============================================================================
 
 @apiv1.get('hello/', tags=["Test"])
