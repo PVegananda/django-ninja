@@ -18,7 +18,7 @@ from django_ratelimit.decorators import ratelimit
 from ninja_simple_jwt.auth.views.api import mobile_auth_router
 from ninja_simple_jwt.auth.ninja_auth import HttpJwtAuth
 from django.contrib.auth.models import User
-from django.http import HttpRequest
+from django.http import HttpRequest, FileResponse
 from courses.models import Course, CourseContent, CourseMember, Comment
 from courses.schemas import (
     CourseIn, CourseOut, DetailCourseOut,
@@ -771,6 +771,54 @@ def upload_content_attachment(request, id: int):
     content.save()
     
     return {"message": "Attachment berhasil diupload", "filename": file.name}
+
+
+# ============================================================================
+# FILE DOWNLOAD ENDPOINTS - Modul 08
+# ============================================================================
+
+@apiv1.get('contents/{id}/download/', auth=apiAuth, tags=["File Download"])
+def download_attachment(request, id: int):
+    """
+    Download file attachment dari course content.
+    
+    Hanya member course yang boleh mendownload file.
+    
+    Path Parameters:
+    - id: ID course content
+    
+    Response: File download dengan proper headers
+    
+    Authentication: Wajib login (Bearer token)
+    """
+    user = User.objects.get(pk=request.user.id)
+    content = get_object_or_404(CourseContent, pk=id)
+    
+    # Validasi: user harus terdaftar sebagai member course
+    is_member = CourseMember.objects.filter(
+        course_id=content.course_id,
+        user_id=user
+    ).exists()
+    
+    # Allow course owner (teacher) to download their content
+    is_course_owner = (content.course_id.teacher == user)
+    
+    if not (is_member or is_course_owner):
+        raise HttpError(403, "Anda harus terdaftar di course ini untuk mendownload file")
+    
+    # Cek apakah file ada
+    if not content.file_attachment:
+        raise HttpError(404, "Content ini tidak memiliki file attachment")
+    
+    # Return file response
+    filename = content.file_attachment.name.split('/')[-1]
+    response = FileResponse(
+        content.file_attachment.open(),
+        as_attachment=True,
+        filename=filename,
+        content_type='application/octet-stream'
+    )
+    return response
 
 
 # ============================================================================# TEST ENDPOINT
