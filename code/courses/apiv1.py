@@ -24,7 +24,7 @@ from courses.schemas import (
     CourseIn, CourseOut, DetailCourseOut,
     CourseContentIn, CourseContentOut,
     Register, UserOut, CommentIn, CommentOut, CommentUpdate,
-    CourseMemberOut
+    CourseMemberOut, CourseUpdate, ContentUpdate
 )
 from courses.filters import CourseFilter, CourseContentFilter
 from typing import List
@@ -819,6 +819,103 @@ def download_attachment(request, id: int):
         content_type='application/octet-stream'
     )
     return response
+
+
+# ============================================================================
+# PARTIAL UPDATE ENDPOINTS (PATCH) - Modul 08
+# ============================================================================
+
+@apiv1.patch('courses/{id}/', response=CourseOut, auth=apiAuth, tags=["Courses"])
+def patch_course(request, id: int, data: CourseUpdate):
+    """
+    Partial update course (PATCH method).
+    
+    Hanya pemilik course yang boleh mengupdate. Hanya field yang dikirim yang akan diubah.
+    
+    Path Parameters:
+    - id: ID course yang akan diupdate
+    
+    Request Body (JSON):
+    - name: (opsional) Nama course baru
+    - description: (opsional) Deskripsi baru
+    - price: (opsional) Harga baru
+    
+    Key difference from PUT:
+    - PUT: harus mengirim SEMUA field (full replacement)
+    - PATCH: hanya mengirim field yang ingin diubah (partial update)
+    
+    Contoh:
+    - Hanya ubah harga: {\"price\": 50000}
+    - Hanya ubah nama: {\"name\": \"Python Lanjut\"}
+    - Ubah multiple fields: {\"name\": \"...\", \"price\": 75000}
+    
+    Field yang tidak dikirim TIDAK akan berubah (tetap nilai lama).
+    
+    Response: 200 OK dengan data course yang sudah diupdate
+    Errors:
+    - 403: User bukan pemilik course
+    - 404: Course tidak ditemukan
+    
+    Authentication: Wajib login (Bearer token)
+    """
+    user = User.objects.get(pk=request.user.id)
+    course = get_object_or_404(Course, pk=id)
+    
+    # Authorization check
+    if course.teacher != user:
+        raise HttpError(403, "Hanya pemilik course yang dapat mengedit")
+    
+    # Update only fields that were provided (exclude_unset=True)
+    update_data = data.dict(exclude_unset=True)
+    for attr, value in update_data.items():
+        setattr(course, attr, value)
+    
+    course.save()
+    return course
+
+
+@apiv1.patch('contents/{id}/', response=CourseContentOut, auth=apiAuth, tags=["Course Content"])
+def patch_content(request, id: int, data: ContentUpdate):
+    """
+    Partial update course content (PATCH method).
+    
+    Hanya pemilik course yang boleh mengupdate. Hanya field yang dikirim yang akan diubah.
+    
+    Path Parameters:
+    - id: ID course content yang akan diupdate
+    
+    Request Body (JSON):
+    - name: (opsional) Nama konten baru
+    - description: (opsional) Deskripsi baru
+    - video_url: (opsional) URL video baru
+    
+    Contoh:
+    - Hanya update URL video: {\"video_url\": \"https://...\"}
+    - Ubah nama dan deskripsi: {\"name\": \"Topik Baru\", \"description\": \"...\"}
+    
+    Field yang tidak dikirim TIDAK akan berubah.
+    
+    Response: 200 OK dengan data content yang sudah diupdate
+    Errors:
+    - 403: User bukan pemilik course parent
+    - 404: Content tidak ditemukan
+    
+    Authentication: Wajib login (Bearer token)
+    """
+    user = User.objects.get(pk=request.user.id)
+    content = get_object_or_404(CourseContent, pk=id)
+    
+    # Authorization check
+    if content.course_id.teacher != user:
+        raise HttpError(403, "Hanya pemilik course yang dapat mengedit konten")
+    
+    # Update only fields that were provided (exclude_unset=True)
+    update_data = data.dict(exclude_unset=True)
+    for attr, value in update_data.items():
+        setattr(content, attr, value)
+    
+    content.save()
+    return content
 
 
 # ============================================================================# TEST ENDPOINT

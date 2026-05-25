@@ -54,6 +54,17 @@ class CourseIn(Schema):
     price: int = 10000
 
 
+class CourseUpdate(Schema):
+    """
+    Schema untuk partial update Course (PATCH method).
+    
+    Semua field optional - client hanya mengirim field yang ingin diubah.
+    """
+    name: Optional[str] = None
+    description: Optional[str] = None
+    price: Optional[int] = None
+
+
 class CourseOut(Schema):
     """
     Schema untuk output data Course.
@@ -108,6 +119,17 @@ class CourseContentIn(Schema):
     video_url: Optional[str] = None
     course_id: int
     parent_id: Optional[int] = None
+
+
+class ContentUpdate(Schema):
+    """
+    Schema untuk partial update CourseContent (PATCH method).
+    
+    Semua field optional - client hanya mengirim field yang ingin diubah.
+    """
+    name: Optional[str] = None
+    description: Optional[str] = None
+    video_url: Optional[str] = None
 
 
 class CourseContentOut(Schema):
