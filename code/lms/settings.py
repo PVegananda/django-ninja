@@ -1,12 +1,13 @@
 """
-Django settings untuk Simple LMS - Lab 05: Optimasi Database
+Django settings untuk Simple LMS - Modul 12: Message Brokers & Async Tasks
 
-Melanjutkan dari Modul 04 (Django ORM) dengan tambahan:
-- Database PostgreSQL (bukan SQLite)
-- Django Silk untuk query profiling
-- Media files untuk ImageField dan FileField
+Melanjutkan dari modul-modul sebelumnya dengan tambahan:
+- Celery + RabbitMQ untuk asynchronous task processing
+- Celery Beat untuk periodic tasks (cron jobs)
+- Redis sebagai result backend Celery (DB 2)
 """
 
+import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -165,3 +166,55 @@ SESSION_ENGINE = "django.contrib.sessions.backends.cache"
 SESSION_CACHE_ALIAS = "default"
 SESSION_COOKIE_AGE = 86400          # 24 jam dalam detik
 SESSION_SAVE_EVERY_REQUEST = False  # Hanya save jika session berubah
+
+
+# =============================================================================
+# Celery Configuration - Modul 12: Message Brokers & Async Tasks
+# =============================================================================
+# Broker: RabbitMQ (AMQP) untuk mengantri task
+# Result Backend: Redis DB 2 untuk menyimpan hasil task
+
+CELERY_BROKER_URL = os.environ.get(
+    'CELERY_BROKER_URL',
+    'amqp://admin:password123@rabbitmq:5672//'
+)
+
+CELERY_RESULT_BACKEND = os.environ.get(
+    'CELERY_RESULT_BACKEND',
+    'redis://redis:6379/2'
+)
+
+# Serialisasi pesan dalam format JSON (aman dan universal)
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+
+# Timezone sesuai dengan Django (Asia/Jakarta)
+CELERY_TIMEZONE = 'Asia/Jakarta'
+
+# Pastikan task result tidak expired terlalu cepat (1 hari)
+CELERY_RESULT_EXPIRES = 86400
+
+# =============================================================================
+# Celery Beat - Periodic Tasks (cron jobs)
+# =============================================================================
+# Jadwal task yang berjalan otomatis tanpa trigger manual.
+# Celery Beat mengirim task ke queue sesuai jadwal,
+# Celery Worker yang mengeksekusinya.
+
+from celery.schedules import crontab  # noqa: E402
+
+CELERY_BEAT_SCHEDULE = {
+    # Generate statistik harian setiap tengah malam
+    'daily-course-stats': {
+        'task': 'courses.tasks.generate_daily_stats',
+        'schedule': crontab(hour=0, minute=0),  # Setiap hari pukul 00:00 WIB
+        'args': (),
+    },
+    # Cleanup MongoDB activity logs yang sudah lebih dari 30 hari
+    'cleanup-old-activity-logs': {
+        'task': 'courses.tasks.cleanup_old_logs',
+        'schedule': crontab(hour=2, minute=0),  # Setiap hari pukul 02:00 WIB
+        'args': (),
+    },
+}
