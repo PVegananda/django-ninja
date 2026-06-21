@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     "silk",                 # Django Silk - query profiling (Modul 05)
     "ninja_simple_jwt",     # JWT authentication (Modul 07)
     "courses",              # Aplikasi Simple LMS kita
+    "analytics",            # Analytics app berbasis MongoDB (Modul 11)
 ]
 
 
