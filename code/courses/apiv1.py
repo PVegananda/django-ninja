@@ -31,6 +31,7 @@ from utils.redis_client import update_course_popularity, get_top_courses, init_c
 from analytics.activity_service import (
     log_activity, ACTION_VIEW_COURSE, ACTION_ENROLL
 )  # MongoDB activity logging (Modul 11)
+from courses.tasks import send_enrollment_notification  # Celery task (Modul 12)
 from typing import List
 
 # ============================================================================
@@ -416,6 +417,13 @@ def course_enrollment(request, id: int):
         )
     except Exception:
         pass  # MongoDB error tidak boleh merusak response utama
+
+    # Kirim notifikasi enrollment via Celery (asynchronous, non-blocking)
+    # User langsung dapat response tanpa menunggu email terkirim
+    try:
+        send_enrollment_notification.delay(user.id, id)
+    except Exception:
+        pass  # Celery error tidak boleh merusak response utama
 
     return enrollment
 
