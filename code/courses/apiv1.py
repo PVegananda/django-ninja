@@ -713,6 +713,64 @@ def delete_comment(request, id: int):
 
 
 # ============================================================================
+# SESSION ENDPOINTS - Course Visit History (Redis Session)
+# ============================================================================
+
+@apiv1.post('courses/{id}/visit/', auth=apiAuth, tags=["Session"])
+def visit_course(request, id: int):
+    """
+    Mencatat kunjungan user ke halaman course.
+
+    Menggunakan Django session (disimpan di Redis) untuk tracking kunjungan.
+    Data disimpan per-user dan expire sesuai SESSION_COOKIE_AGE (24 jam).
+
+    Path Parameters:
+    - id: ID course yang dikunjungi
+
+    Response: Daftar course yang sudah dikunjungi
+
+    Authentication: Wajib login (Bearer token)
+    """
+    # Pastikan course ada
+    get_object_or_404(Course, pk=id)
+
+    # Ambil daftar course yang sudah dikunjungi dari session
+    visited = request.session.get('visited_courses', [])
+
+    if id not in visited:
+        visited.append(id)
+        request.session['visited_courses'] = visited
+        request.session.modified = True
+
+    return {
+        "course_id": id,
+        "total_visited": len(visited),
+        "visited_courses": visited
+    }
+
+
+@apiv1.get('my-history/', auth=apiAuth, tags=["Session"])
+def get_visit_history(request):
+    """
+    Mengambil histori kunjungan course dari session user saat ini.
+
+    Data diambil dari Redis session yang sudah dikonfigurasi.
+    Session expire setelah 24 jam (SESSION_COOKIE_AGE).
+
+    Response:
+    - total_visited: Jumlah course yang pernah dikunjungi
+    - visited_courses: List ID course yang pernah dikunjungi
+
+    Authentication: Wajib login (Bearer token)
+    """
+    visited = request.session.get('visited_courses', [])
+    return {
+        "total_visited": len(visited),
+        "visited_courses": visited
+    }
+
+
+# ============================================================================
 # TEST ENDPOINT
 # ============================================================================
 
