@@ -817,3 +817,84 @@ def get_visit_history(request):
 def hello_api(request):
     """Test endpoint untuk memastikan API berjalan dengan baik."""
     return "Menyala abangkuh ..."
+
+
+# ============================================================================
+# CELERY TASK ENDPOINTS - Modul 12: Message Brokers
+# ============================================================================
+
+@apiv1.post('reports/generate/{course_id}/', auth=apiAuth, tags=["Reports"])
+def generate_report(request, course_id: int):
+    """
+    Trigger pembuatan report course secara asynchronous.
+
+    Report akan dibuat di background oleh Celery Worker.
+    Client mendapatkan task_id untuk melakukan polling status.
+
+    Path Parameters:
+    - course_id: ID course yang akan di-generate reportnya
+
+    Response:
+    - task_id: UUID untuk cek status report
+    - status: 'processing' (langsung, tidak menunggu selesai)
+
+    Authentication: Wajib login (Bearer token)
+
+    Flow:
+    1. POST /api/v1/reports/generate/1/  → dapat task_id
+    2. GET  /api/v1/reports/status/{task_id}/  → polling hingga SUCCESS
+    """
+    course = get_object_or_404(Course, pk=course_id)
+
+    # Import task di sini untuk menghindari circular import saat startup
+    from courses.tasks import generate_course_report
+
+    # Kirim task ke Celery (non-blocking)
+    task = generate_course_report.delay(course_id)
+
+    return {
+        'task_id': task.id,
+        'status': 'processing',
+        'message': f"Report untuk course '{course.name}' sedang dibuat di background.",
+        'check_status_url': f"/api/v1/reports/status/{task.id}/"
+    }
+
+
+@apiv1.get('reports/status/{task_id}/', tags=["Reports"])
+def report_status(request, task_id: str):
+    """
+    Cek status Celery task report generation.
+
+    Gunakan endpoint ini untuk polling setelah memanggil
+    POST /api/v1/reports/generate/{course_id}/.
+
+    Path Parameters:
+    - task_id: UUID task yang didapat dari endpoint generate
+
+    Response:
+    - status: PENDING | STARTED | SUCCESS | FAILURE | RETRY
+    - result: Data report (hanya ada jika status SUCCESS)
+    - message: Info tambahan (saat masih PENDING/STARTED)
+
+    Status Lifecycle:
+        PENDING → STARTED → SUCCESS (atau FAILURE)
+    """
+    from celery.result import AsyncResult
+
+    result = AsyncResult(task_id)
+
+    response = {
+        'task_id': task_id,
+        'status': result.status,
+    }
+
+    if result.ready():
+        if result.successful():
+            response['result'] = result.result
+        else:
+            # Jika gagal, tampilkan pesan error
+            response['error'] = str(result.result)
+    else:
+        response['message'] = 'Task masih dalam proses, coba lagi beberapa saat...'
+
+    return response
