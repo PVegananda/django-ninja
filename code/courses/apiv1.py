@@ -18,6 +18,7 @@ from django_ratelimit.decorators import ratelimit
 from ninja_simple_jwt.auth.views.api import mobile_auth_router
 from ninja_simple_jwt.auth.ninja_auth import HttpJwtAuth
 from django.contrib.auth.models import User
+from django.core.cache import cache  # Django Cache Framework (Redis)
 from courses.models import Course, CourseContent, CourseMember, Comment
 from courses.schemas import (
     CourseIn, CourseOut, DetailCourseOut,
@@ -26,6 +27,7 @@ from courses.schemas import (
     CourseMemberOut
 )
 from courses.filters import CourseFilter, CourseContentFilter
+from utils.redis_client import update_course_popularity, get_top_courses, init_course_popularity
 from typing import List
 
 # ============================================================================
@@ -55,7 +57,7 @@ Key types:
 apiv1 = NinjaAPI(
     title="Simple LMS API",
     version="1.0.0",
-    description="REST API untuk Simple Learning Management System - Modul 08 (Advanced API Features)"
+    description="REST API untuk Simple Learning Management System - Modul 10 (NoSQL Redis)"
 )
 
 # Register authentication router dari ninja-simple-jwt
@@ -147,27 +149,17 @@ def list_courses(
     """
     Mengambil daftar semua course dengan filtering, sorting, dan pagination.
 
+    Menggunakan Cache-Aside pattern:
+    - Cache key: 'courses_list' (default ordering, no filters)
+    - TTL: 5 menit
+    - Cache di-invalidasi saat create/update/delete course
+
     Query Parameters:
     - search: Cari berdasarkan nama course atau deskripsi (case-insensitive)
     - price: Tampilkan course dengan harga di atas nilai ini
     - created_at: Tampilkan course yang dibuat setelah tanggal tertentu
     - ordering: Urutan hasil (name, -name, price, -price, created_at, -created_at) (default: -created_at)
     - page: Nomor halaman (default: 1, per-page: 10)
-
-    Contoh:
-    - GET /api/v1/courses/
-    - GET /api/v1/courses/?search=python
-    - GET /api/v1/courses/?price=50000&ordering=-price
-    - GET /api/v1/courses/?search=web&ordering=price&page=2
-
-    Response dengan pagination:
-    {
-        "items": [
-            {"id": 1, "name": "Belajar Python Dasar", "price": 75000, ...},
-            ...
-        ],
-        "count": 15
-    }
     """
     # Whitelist field yang boleh digunakan untuk sorting
     allowed_fields = ['name', 'price', 'created_at', '-name', '-price', '-created_at']
@@ -186,25 +178,61 @@ def list_courses(
     return qs
 
 
+@apiv1.get('courses/popular/', response=list, tags=["Courses"])
+def popular_courses(request):
+    """
+    Menampilkan top 10 course terpopuler berdasarkan jumlah enrollment.
+
+    Menggunakan Redis Sorted Set (ZREVRANGE) untuk mendapatkan ranking
+    course berdasarkan score (jumlah enrollment).
+
+    Response: List of {course_id, name, enrollment_count}
+    """
+    top = get_top_courses(limit=10)
+    result = []
+    for member, score in top:
+        # member format: 'course:ID'
+        course_id = int(member.split(':')[1])
+        try:
+            course = Course.objects.get(pk=course_id)
+            result.append({
+                'course_id': course_id,
+                'name': course.name,
+                'enrollment_count': int(score)
+            })
+        except Course.DoesNotExist:
+            pass
+    return result
+
+
 @apiv1.get('courses/{id}', response=DetailCourseOut, tags=["Courses"])
 def detail_course(request, id: int):
     """
     Mengambil detail course beserta daftar kontennya.
 
+    Menggunakan Cache-Aside pattern:
+    - Cache key: 'course_detail:{id}'
+    - TTL: 5 menit
+    - Cache di-invalidasi saat update/delete course
+
     Path Parameters:
     - id: ID course yang akan diambil
-
-    Response menampilkan:
-    - Semua data course (name, description, price, teacher, etc)
-    - List konten yang ada di course ini
-
-    Contoh:
-    - GET /api/v1/courses/1
     """
+    # Cache-Aside: cek cache dulu
+    cache_key = f'course_detail:{id}'
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    # Cache miss - query database
     course = get_object_or_404(Course, pk=id)
-    return Course.objects.prefetch_related(
+    result = Course.objects.prefetch_related(
         'coursecontent_set'
     ).select_related('teacher').get(pk=id)
+
+    # Simpan ke cache (TTL 5 menit)
+    cache.set(cache_key, result, timeout=300)
+    return result
 
 
 @apiv1.post('courses/', response={201: CourseOut}, auth=apiAuth, tags=["Courses"])
@@ -233,6 +261,13 @@ def create_course(request, data: CourseIn):
     teacher = User.objects.get(pk=request.user.id)
 
     course = Course.objects.create(**data.dict(), teacher=teacher)
+
+    # Write-Through: invalidasi cache list karena ada data baru
+    cache.delete('courses_list')
+
+    # Inisialisasi leaderboard dengan score 0
+    init_course_popularity(course.id, 0)
+
     return 201, course
 
 
@@ -274,6 +309,10 @@ def update_course(request, id: int, data: CourseIn):
         setattr(course, attr, value)
     course.save()
 
+    # Write-Through: invalidasi cache list dan detail
+    cache.delete('courses_list')
+    cache.delete(f'course_detail:{id}')
+
     return course
 
 
@@ -303,6 +342,9 @@ def delete_course(request, id: int):
 
     try:
         course.delete()
+        # Write-Through: invalidasi semua cache terkait course
+        cache.delete('courses_list')
+        cache.delete(f'course_detail:{id}')
         return 204, None
     except Exception:
         raise HttpError(
@@ -340,6 +382,10 @@ def course_enrollment(request, id: int):
         course_id=course,
         roles='std'  # Default role: student
     )
+
+    # Update leaderboard popularity score saat ada enrollment baru
+    update_course_popularity(id, score_increment=1)
+
     return enrollment
 
 
