@@ -11,9 +11,11 @@ services:
     environment:
       - DEBUG=True
       - REDIS_URL=redis://redis:6379/0
+      - MONGO_URI=mongodb://admin:password123@mongodb:27017/lms_analytics?authSource=admin
     depends_on:
       - database
       - redis
+      - mongodb
 
   database:
     image: postgres:16
@@ -36,6 +38,18 @@ services:
       - redis_data:/data
     command: redis-server --appendonly yes
 
+  mongodb:
+    image: mongo:7
+    container_name: lms-mongodb
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password123
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
 volumes:
   pg_data:
   redis_data:
+  mongo_data:
