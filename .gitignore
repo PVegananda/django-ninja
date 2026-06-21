@@ -1,0 +1,21 @@
+# Coverage output
+htmlcov/
+.coverage
+.coverage.*
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+media/
+
+# Environment
+.env
+.venv
+env/
+venv/
