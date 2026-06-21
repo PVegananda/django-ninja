@@ -132,3 +132,35 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+
+# =============================================================================
+# Redis Cache Configuration - Modul 10: NoSQL Redis
+# =============================================================================
+# django-redis sebagai backend cache, menyimpan data di Redis db 1
+# KEY_PREFIX: namespace untuk menghindari collision dengan key lain
+# TIMEOUT: default TTL 5 menit (300 detik)
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://redis:6379/1",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        },
+        "KEY_PREFIX": "simple_lms",
+        "TIMEOUT": 300,  # Default TTL: 5 menit
+    }
+}
+
+
+# =============================================================================
+# Session Configuration - Redis Session Backend
+# =============================================================================
+# Menggunakan Redis (via cache) sebagai session store,
+# jauh lebih cepat daripada database session default.
+
+SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+SESSION_CACHE_ALIAS = "default"
+SESSION_COOKIE_AGE = 86400          # 24 jam dalam detik
+SESSION_SAVE_EVERY_REQUEST = False  # Hanya save jika session berubah
