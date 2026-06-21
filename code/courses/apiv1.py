@@ -28,6 +28,9 @@ from courses.schemas import (
 )
 from courses.filters import CourseFilter, CourseContentFilter
 from utils.redis_client import update_course_popularity, get_top_courses, init_course_popularity
+from analytics.activity_service import (
+    log_activity, ACTION_VIEW_COURSE, ACTION_ENROLL
+)  # MongoDB activity logging (Modul 11)
 from typing import List
 
 # ============================================================================
@@ -232,6 +235,21 @@ def detail_course(request, id: int):
 
     # Simpan ke cache (TTL 5 menit)
     cache.set(cache_key, result, timeout=300)
+
+    # Log aktivitas ke MongoDB (silent - tidak memblokir response jika error)
+    try:
+        if hasattr(request, 'user') and request.user and request.user.is_authenticated:
+            log_activity(
+                user_id=request.user.id,
+                username=request.user.username,
+                action=ACTION_VIEW_COURSE,
+                course_id=id,
+                course_name=result.name,
+                metadata={'source': 'api_v1'}
+            )
+    except Exception:
+        pass  # MongoDB error tidak boleh merusak response utama
+
     return result
 
 
@@ -385,6 +403,19 @@ def course_enrollment(request, id: int):
 
     # Update leaderboard popularity score saat ada enrollment baru
     update_course_popularity(id, score_increment=1)
+
+    # Log aktivitas enrollment ke MongoDB (silent)
+    try:
+        log_activity(
+            user_id=user.id,
+            username=user.username,
+            action=ACTION_ENROLL,
+            course_id=id,
+            course_name=course.name,
+            metadata={'source': 'api_v1'}
+        )
+    except Exception:
+        pass  # MongoDB error tidak boleh merusak response utama
 
     return enrollment
 
